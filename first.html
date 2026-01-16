@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flappy Bird Clone — Start Button</title>
+<style>
+  html,body {height:100%;margin:0;background:#70c5ce;display:flex;align-items:center;justify-content:center;font-family:Arial;}
+  #container {position:relative;}
+  canvas {background: linear-gradient(#70c5ce,#a0e7f5); box-shadow:0 8px 20px rgba(0,0,0,0.2); border-radius:8px; display:block;}
+  .overlay {position:fixed;top:16px;left:16px;color:#fff;font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,0.4);}
+  /* Start screen */
+  .start-screen {
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:auto;
+  }
+  .start-panel {
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    padding: 22px 28px;
+    border-radius: 10px;
+    text-align:center;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+  .start-panel h1 {margin:0 0 8px;font-size:20px;}
+  .start-panel p {margin:0 0 14px;font-size:13px;opacity:0.95;}
+  .start-btn {
+    background: #ffcc00;
+    color:#222;
+    border:0;
+    padding:10px 18px;
+    font-weight:700;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:15px;
+  }
+  .start-btn:active {transform:translateY(1px);}
+</style>
+</head>
+<body>
+<div class="overlay">Press <strong>Space</strong> or <strong>Click/Tap</strong> to flap</div>
+<div id="container">
+  <canvas id="game" width="400" height="600"></canvas>
+
+  <div id="startScreen" class="start-screen">
+    <div class="start-panel">
+      <h1>Flappy Bird Clone</h1>
+      <p>Click <strong>Start</strong> to play. Use Space or click/tap to flap.</p>
+      <button id="startBtn" class="start-btn">Start</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+let frames = 0, score = 0, best = 0, running = false;
+
+// Bird
+const bird = {
+  x: 80, y: H/2, w: 34, h: 24,
+  vel: 0, gravity: 0.6, jump: -10,
+  draw() {
+    ctx.fillStyle = '#FFDD57';
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, this.w/2, this.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.fillRect(this.x+6, this.y-4, 6, 6); // eye
+  },
+  update() {
+    this.vel += this.gravity;
+    this.y += this.vel;
+    if (this.y + this.h/2 >= H - 80) { this.y = H - 80 - this.h/2; this.vel = 0; running = false; }
+    if (this.y - this.h/2 <= 0) { this.y = this.h/2; this.vel = 0; }
+  },
+  flap() { this.vel = this.jump; running = true; }
+};
+
+// Pipes
+const pipes = [];
+function spawnPipe() {
+  const gap = 140;
+  const minTop = 40, maxTop = H - gap - 120;
+  const top = Math.floor(Math.random() * (maxTop - minTop + 1)) + minTop;
+  pipes.push({x: W, top: top, w: 60, passed: false});
+}
+function updatePipes() {
+  for (let i = pipes.length-1; i >= 0; i--) {
+    pipes[i].x -= 2.6;
+    if (!pipes[i].passed && pipes[i].x + pipes[i].w < bird.x) { score++; pipes[i].passed = true; best = Math.max(best, score); }
+    // collision
+    const gap = 140;
+    if (bird.x + bird.w/2 > pipes[i].x && bird.x - bird.w/2 < pipes[i].x + pipes[i].w) {
+      if (bird.y - bird.h/2 < pipes[i].top || bird.y + bird.h/2 > pipes[i].top + gap) running = false;
+    }
+    if (pipes[i].x + pipes[i].w < -10) pipes.splice(i,1);
+  }
+}
+
+// Draw
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // background / sky
+  // ground
+  ctx.fillStyle = '#ded895';
+  ctx.fillRect(0, H-80, W, 80);
+  // pipes
+  ctx.fillStyle = '#2ecc71';
+  for (const p of pipes) {
+    ctx.fillRect(p.x, 0, p.w, p.top);
+    ctx.fillRect(p.x, p.top + 140, p.w, H - (p.top + 140) - 80);
+  }
+  // bird
+  bird.draw();
+  // score
+  ctx.fillStyle = '#fff';
+  ctx.font = '28px Arial';
+  ctx.fillText(score, W/2 - 8, 60);
+  // best
+  ctx.font = '14px Arial';
+  ctx.fillText('Best: ' + best, 10, 24);
+
+  if (!running) {
+    // show a subtle overlay only when game is stopped (not the start screen)
+    if (!startScreenVisible()) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(W/2 - 140, H/2 - 60, 280, 120);
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px Arial';
+      ctx.fillText('Game Over', W/2 - 60, H/2 - 20);
+      ctx.font = '14px Arial';
+      ctx.fillText('Press Space or Click to Restart', W/2 - 120, H/2 + 10);
+    }
+  }
+}
+
+// Loop
+function loop() {
+  frames++;
+  if (running && frames % 90 === 0) spawnPipe();
+  if (running) {
+    bird.update();
+    updatePipes();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Input
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    if (!running) reset();
+    bird.flap();
+  }
+});
+canvas.addEventListener('mousedown', () => {
+  if (!running) reset();
+  bird.flap();
+});
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); if (!running) reset(); bird.flap(); }, {passive:false});
+
+// Start button logic
+const startBtn = document.getElementById('startBtn');
+const startScreen = document.getElementById('startScreen');
+
+function startScreenVisible() {
+  return startScreen && startScreen.style.display !== 'none';
+}
+
+startBtn.addEventListener('click', () => {
+  // hide start screen and begin
+  startScreen.style.display = 'none';
+  reset();
+});
+
+// Reset / start game
+function reset() {
+  pipes.length = 0;
+  bird.y = H/2; bird.vel = 0;
+  score = 0; frames = 0; running = true;
+  // spawn an initial pipe after a short delay so player has time to flap
+  setTimeout(() => { if (running) spawnPipe(); }, 600);
+}
+
+// Prevent the game from spawning pipes or running until Start is clicked
+loop();
+</script>
+</body>
+</html>
